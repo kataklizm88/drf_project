@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from mainapp.models import Product, ProductCategory
-
+from django.views.generic.list import ListView
 
 
 def index(request):
@@ -8,10 +8,19 @@ def index(request):
     return render(request, 'mainapp/index.html', context)
 
 
-def products(request, id=None):
-    context = {
-        'products': Product.objects.all(),
-        'categories':  ProductCategory.objects.all()
-    }
+class ProductListView(ListView):
+    model = Product
+    template_name = 'mainapp/products.html'
+    paginate_by = 3
 
-    return render(request, 'mainapp/products.html', context)
+    def dispatch(self, request, *args, **kwargs):
+        return super(ProductListView, self).dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        if 'category_id' in kwargs.keys():
+            self.object_list = Product.objects.filter(category_id=kwargs['category_id'])
+        else:
+            self.object_list = Product.objects.all()
+        context = self.get_context_data()
+        context['categories'] = ProductCategory.objects.all()
+        return self.render_to_response(context)

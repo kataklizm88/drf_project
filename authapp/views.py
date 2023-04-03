@@ -1,56 +1,55 @@
 from django.shortcuts import render, HttpResponseRedirect
 from authapp.forms import UserLoginForm, UserRegisterForm, UserProfileForm
-from django.contrib import auth
-from django.urls import reverse
+from django.urls import reverse_lazy
 from basket.models import Basket
-from django.contrib import messages
+from authapp.models import User
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView, LogoutView
+from django.views.generic.edit import CreateView
+from django.utils.decorators import method_decorator
 
 
-def login(request):
-    if request.method == 'POST':
-        form = UserLoginForm(data=request.POST)
-        if form.is_valid():
-            username = request.POST['username']
-            password = request.POST['password']
-            user = auth.authenticate(username=username, password=password)
-            if user and user.is_active:
-                auth.login(request, user)
-                return HttpResponseRedirect(reverse('index'))
-    else:
-        form = UserLoginForm()
-    context = {'form': form}
-    return render(request, 'authapp/login.html', context)
+class LoginCreateView(LoginView):
+    model = User
+    form_class = UserLoginForm
+    template_name = 'authapp/login.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        return super(LoginCreateView, self).dispatch(request, *args, **kwargs)
+
+    def get_success_url(self):
+        url = reverse_lazy('index')
+        return url
 
 
-def register(request):
-    if request.method == 'POST':
-        form = UserRegisterForm(data=request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Вы успешно прошли регистрацию")
-            return HttpResponseRedirect(reverse('auth:login'))
-    else:
-        form = UserRegisterForm()
-    context = {'form': form}
-    return render(request, 'authapp/register.html', context)
+class ProfileCreateView(CreateView):
+    model = User
+    form_class = UserProfileForm
+    template_name = 'authapp/profile.html'
+    success_url = 'auth:profile'
+
+    @method_decorator(login_required)
+    def dispatch(self, request, *args, **kwargs):
+        return super(ProfileCreateView, self).dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['baskets'] = Basket.objects.filter(user=self.request.user)
+        return context
 
 
-def logout(request):
-    auth.logout(request)
-    return HttpResponseRedirect(reverse('index'))
+class RegisterCreateView(CreateView):
+    model = User
+    form_class = UserRegisterForm
+    template_name = 'authapp/register.html'
+    success_url = reverse_lazy('auth:login')
 
-@login_required
-def profile(request):
-    if request.method == 'POST':
-        form = UserProfileForm(data=request.POST, files=request.FILES, instance=request.user)
-        if form.is_valid():
-            form.save()
-            return HttpResponseRedirect(reverse('auth:profile'))
-    else:
-        form = UserProfileForm(instance=request.user)
-    context = {
-        'form': form,
-        'baskets': Basket.objects.filter(user=request.user),
-    }
-    return render(request, 'authapp/profile.html', context)
+    def dispatch(self, request, *args, **kwargs):
+        return super(RegisterCreateView, self).dispatch(request, *args, **kwargs)
+
+
+class LogoutUserView(LogoutView):
+    next_page = reverse_lazy('index')
+
+    def dispatch(self, request, *args, **kwargs):
+        return super(LogoutUserView, self).dispatch(request, *args, **kwargs)
